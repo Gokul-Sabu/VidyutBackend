@@ -16,6 +16,9 @@ from .api.stats import Query as StatsQuery
 
 to_tz = timezone.get_default_timezone()
 
+from .acrd.helper import getTransactionPayload
+from framework.settings import ACRD_ENDPOINT
+
 
 class InitiateOrderObj(graphene.ObjectType):
     transactionID = graphene.String()
@@ -118,9 +121,31 @@ class CollectPayment(graphene.Mutation):
         return {"status": False}
 
 
+class PaymentLinkObj(graphene.ObjectType):
+    url = graphene.String()
+    payload = graphene.String()
+
+
+class GetPaymentLink(graphene.Mutation):
+    class Arguments:
+        transactionID = graphene.String(required=True)
+
+    Output = PaymentLinkObj
+
+    @login_required
+    def mutate(self, info, transactionID):
+        try:
+            tobj = Transaction.objects.get(transactionID=transactionID)
+            payload = getTransactionPayload(tobj.amount, transactionID)
+            return PaymentLinkObj(payload=payload, url=ACRD_ENDPOINT)
+        except Transaction.DoesNotExist:
+            return None
+
+
 class Mutation(object):
     initiateOrder = InitiateOrder.Field()
     collectPayment = CollectPayment.Field()
+    getPaymentLink = GetPaymentLink.Field()
 
 
 class BuyerObj(graphene.ObjectType):
@@ -343,4 +368,3 @@ class Query(StatsQuery, object):
         user = info.context.user
         if UserAccess.objects.get(user=user).viewAllTransactions:
             return Transaction.objects.values().all()
-
